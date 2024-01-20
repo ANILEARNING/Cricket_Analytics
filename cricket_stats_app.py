@@ -1,54 +1,6 @@
-# import streamlit as st
-# import pandas as pd
-
-# # Load your dataset (replace 'your_dataset.csv' with the actual file path)
-# df = pd.read_csv(r'C:\Users\USER\Downloads\Telegram Desktop\deliveries_updated_mens_ipl.csv')
-
-# # Get unique player names from the dataset
-# player_names = df['batsman'].unique()
-
-# # Dropdown to select a player
-# selected_player = st.selectbox("Select a Player", player_names)
-
-# # Filter data for the selected player
-# player_data = df[df['batsman'] == selected_player].sort_values(by ='matchId',ascending=False)
-
-# # print(player_data)
-# # Function to calculate statistics
-# def calculate_statistics(data):
-#     last_10_matches_score = player_data.groupby(['batsman', 'matchId', 'date', 'batting_team', 'bowling_team']).agg({'batsman_runs': 'sum', 'ball': 'count','dismissal_kind': 'first'})
-#     last_10_matches_score.columns = ['total_runs', 'balls_faced', 'dismissal_kind']
-#     # Sort by matchId in descending order
-#     last_10_matches_score = last_10_matches_score.sort_values(by='matchId', ascending=False)
-
-    
-#     # sorted_data = data.sort_values(by='date', ascending=False)
-#     unique_match_ids = data['matchId'].unique()[:10]
-#     last_10_matches = data[data['matchId'].isin(unique_match_ids)]
-
-#     total_runs = last_10_matches['batsman_runs'].sum()
-#     average = total_runs / 10
-#     strike_rate = (total_runs / last_10_matches.shape[0]) * 100
-#     boundary_percentage = (last_10_matches[last_10_matches['batsman_runs'].isin([4, 6])].shape[0] / 10) * 100
-    
-#     return total_runs, average, strike_rate, boundary_percentage,last_10_matches_score
-
-# # Calculate statistics for the selected player
-# total_runs, average, strike_rate, boundary_percentage, last_10_matches_score = calculate_statistics(player_data)
-
-# # Display the statistics
-# st.title(f"{selected_player}'s Last 10 Matches Statistics")
-# st.write(f"Total Runs: {total_runs}")
-# st.write(f"Average: {average:.2f}")
-# st.write(f"Strike Rate: {strike_rate:.2f}%")
-# st.write(f"Boundary Percentage: {boundary_percentage:.2f}%")
-
-# # Display the last 10 matches data for the selected player
-# st.subheader(f"Last 10 Matches Data for {selected_player}:")
-# st.write(last_10_matches_score.head(10))
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Load your dataset (replace 'your_dataset.csv' with the actual file path)
