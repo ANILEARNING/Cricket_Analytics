@@ -58,60 +58,89 @@ def create_dataframes(all_data):
 
     return df_commentary, df_wagon, df_statistics
 
-
 # Function to save figure to memory and add to PDF
-def save_fig_to_pdf(fig, pdf, x, y):
-    img_buf = io.BytesIO()
-    fig.savefig(img_buf, format='png', bbox_inches="tight")
-    img_buf.seek(0)
-    pdf.image(img_buf, x=x, y=y, w=180)
-    img_buf.close()
+def save_fig_to_pdf(fig, pdf, x, y, w=180, h=100):
+    # Save figure to a temporary file
+    temp_file = "temp_plot.png"
+    fig.savefig(temp_file, format='png', bbox_inches="tight", dpi=300)
+    
+    # Add image to PDF
+    pdf.image(temp_file, x=x, y=y, w=w, h=h)
+    
+    # Close the figure to free up memory
+    plt.close(fig)
 
 # Manhattan Chart (Runs per Over)
 def plot_manhattan_chart(df_statistics, pdf=None):
     if df_statistics.empty:
         st.warning("No statistics available.")
         return
-    df_manhattan = pd.DataFrame(df_statistics.iloc[0]["statistics"]["manhattan"])
     
-    fig, ax = plt.subplots(figsize=(6, 3))
-    sns.barplot(x="over", y="runs", data=df_manhattan, color="blue", ax=ax)
-    ax.set_title("Manhattan Chart - Runs per Over")
-    st.pyplot(fig)
+    try:
+        df_manhattan = pd.DataFrame(df_statistics.iloc[0]["statistics"]["manhattan"])
+        
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.barplot(x="over", y="runs", data=df_manhattan, color="blue", ax=ax)
+        ax.set_title("Manhattan Chart - Runs per Over", fontsize=15)
+        ax.set_xlabel("Over", fontsize=12)
+        ax.set_ylabel("Runs", fontsize=12)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        st.pyplot(fig)
 
-    if pdf:
-        save_fig_to_pdf(fig, pdf, x=10, y=50)
+        if pdf:
+            save_fig_to_pdf(fig, pdf, x=10, y=50)
+    except Exception as e:
+        st.error(f"Error creating Manhattan chart: {e}")
 
 # Worm Chart (Total Runs over Time)
 def plot_worm_chart(df_statistics, pdf=None):
     if df_statistics.empty:
         st.warning("No statistics available.")
         return
-    df_worm = pd.DataFrame(df_statistics.iloc[0]["statistics"]["worm"])
+    
+    try:
+        df_worm = pd.DataFrame(df_statistics.iloc[0]["statistics"]["worm"])
 
-    fig, ax = plt.subplots(figsize=(6, 3))
-    sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green", ax=ax)
-    ax.set_title("Worm Chart - Runs Progression")
-    st.pyplot(fig)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green", ax=ax)
+        ax.set_title("Worm Chart - Runs Progression", fontsize=15)
+        ax.set_xlabel("Over", fontsize=12)
+        ax.set_ylabel("Cumulative Runs", fontsize=12)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        st.pyplot(fig)
 
-    if pdf:
-        save_fig_to_pdf(fig, pdf, x=10, y=100)
+        if pdf:
+            save_fig_to_pdf(fig, pdf, x=10, y=100)
+    except Exception as e:
+        st.error(f"Error creating Worm chart: {e}")
 
 # Boundary Analysis
 def plot_boundary_chart(df_statistics, pdf=None):
     if df_statistics.empty:
         st.warning("No statistics available.")
         return
-    df_boundary = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runtypes"])
-    df_boundary = df_boundary[df_boundary["key"].isin(["run4", "run6"])]
+    
+    try:
+        df_boundary = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runtypes"])
+        df_boundary = df_boundary[df_boundary["key"].isin(["run4", "run6"])]
 
-    fig, ax = plt.subplots(figsize=(6, 3))
-    sns.barplot(x="name", y="value", data=df_boundary, color="orange", ax=ax)
-    ax.set_title("Boundary Breakdown (Fours & Sixes)")
-    st.pyplot(fig)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.barplot(x="name", y="value", data=df_boundary, palette=["lightblue", "orange"], ax=ax)
+        ax.set_title("Boundary Breakdown (Fours & Sixes)", fontsize=15)
+        ax.set_xlabel("Boundary Type", fontsize=12)
+        ax.set_ylabel("Number of Boundaries", fontsize=12)
+        plt.tight_layout()
+        
+        st.pyplot(fig)
 
-    if pdf:
-        save_fig_to_pdf(fig, pdf, x=10, y=150)
+        if pdf:
+            save_fig_to_pdf(fig, pdf, x=10, y=150)
+    except Exception as e:
+        st.error(f"Error creating Boundary chart: {e}")
 
 # Bowler Economy
 def plot_bowler_economy_chart(df_statistics, pdf=None):
@@ -119,90 +148,194 @@ def plot_bowler_economy_chart(df_statistics, pdf=None):
         st.warning("No statistics available.")
         return
 
-    # Check if 'bowlers' key exists
-    if "bowlers" not in df_statistics.iloc[0]["statistics"]:
-        st.warning("No bowler data available.")
-        return
-    
-    df_bowlers = pd.DataFrame(df_statistics.iloc[0]["statistics"]["bowlers"])
+    try:
+        # Check if 'bowlers' key exists
+        if "bowlers" not in df_statistics.iloc[0]["statistics"]:
+            st.warning("No bowler data available.")
+            return
+        
+        df_bowlers = pd.DataFrame(df_statistics.iloc[0]["statistics"]["bowlers"])
 
-    if df_bowlers.empty:
-        st.warning("No bowler data available.")
-        return
+        if df_bowlers.empty:
+            st.warning("No bowler data available.")
+            return
 
-    # Plot Bowler Economy
-    fig, ax = plt.subplots(figsize=(6, 3))
-    sns.barplot(x="name", y="econ", data=df_bowlers, color="red", ax=ax)
-    ax.set_title("Bowler Economy Rate")
-    st.pyplot(fig)
+        # Plot Bowler Economy
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.barplot(x="name", y="econ", data=df_bowlers.sort_values("econ"), palette="coolwarm", ax=ax)
+        ax.set_title("Bowler Economy Rate", fontsize=15)
+        ax.set_xlabel("Bowler", fontsize=12)
+        ax.set_ylabel("Economy Rate", fontsize=12)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        st.pyplot(fig)
 
-    if pdf:
-        save_fig_to_pdf(fig, pdf, x=10, y=200)
-
+        if pdf:
+            save_fig_to_pdf(fig, pdf, x=10, y=200)
+    except Exception as e:
+        st.error(f"Error creating Bowler Economy chart: {e}")
 
 # Generate PDF Report with Charts & KPIs
 def generate_pdf(df_statistics):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, "Cricket Match Report", ln=True, align="C")
-    pdf.ln(10)
+    try:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(200, 10, "Cricket Match Report", ln=True, align="C")
+        pdf.ln(10)
 
-    # KPIs
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(200, 10, "Key Performance Indicators (KPIs)", ln=True)
-    pdf.set_font("Arial", size=10)
-    innings = df_statistics.iloc[0]
-    pdf.cell(200, 10, f"Total Runs: {innings['runs']}", ln=True)
-    pdf.cell(200, 10, f"Total Wickets: {innings['wickets']}", ln=True)
-    pdf.cell(200, 10, f"Overs Played: {innings['overs']}", ln=True)
-    pdf.cell(200, 10, f"Run Rate: {innings['statistics']['runrates'][-1]['runrate']}", ln=True)
-    pdf.cell(200, 10, f"Fours: {sum(x['value'] for x in innings['statistics']['runtypes'] if x['key'] == 'run4')}", ln=True)
-    pdf.cell(200, 10, f"Sixes: {sum(x['value'] for x in innings['statistics']['runtypes'] if x['key'] == 'run6')}", ln=True)
-    
-    # Charts
-    plot_manhattan_chart(df_statistics, pdf)
-    plot_worm_chart(df_statistics, pdf)
-    plot_boundary_chart(df_statistics, pdf)
-    plot_bowler_economy_chart(df_statistics, pdf)
+        # KPIs
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(200, 10, "Key Performance Indicators (KPIs)", ln=True)
+        pdf.set_font("Arial", size=10)
+        innings = df_statistics.iloc[0]
+        
+        # Safely extract KPIs with error handling
+        try:
+            total_runs = innings.get('runs', 'N/A')
+            total_wickets = innings.get('wickets', 'N/A')
+            total_overs = innings.get('overs', 'N/A')
+            
+            run_rates = innings.get('statistics', {}).get('runrates', [])
+            run_rate = run_rates[-1]['runrate'] if run_rates else 'N/A'
+            
+            run_types = innings.get('statistics', {}).get('runtypes', [])
+            fours = sum(x['value'] for x in run_types if x['key'] == 'run4')
+            sixes = sum(x['value'] for x in run_types if x['key'] == 'run6')
+        except Exception as e:
+            st.error(f"Error extracting KPIs: {e}")
+            total_runs = total_wickets = total_overs = run_rate = fours = sixes = 'N/A'
 
-    pdf.output("match_report.pdf")
-    return "match_report.pdf"
+        pdf.cell(200, 10, f"Total Runs: {total_runs}", ln=True)
+        pdf.cell(200, 10, f"Total Wickets: {total_wickets}", ln=True)
+        pdf.cell(200, 10, f"Overs Played: {total_overs}", ln=True)
+        pdf.cell(200, 10, f"Run Rate: {run_rate}", ln=True)
+        pdf.cell(200, 10, f"Fours: {fours}", ln=True)
+        pdf.cell(200, 10, f"Sixes: {sixes}", ln=True)
+        
+        # Charts
+        plot_manhattan_chart(df_statistics, pdf)
+        plot_worm_chart(df_statistics, pdf)
+        plot_boundary_chart(df_statistics, pdf)
+        plot_bowler_economy_chart(df_statistics, pdf)
+
+        # Save PDF
+        pdf_filename = "match_report.pdf"
+        pdf.output(pdf_filename)
+        return pdf_filename
+    except Exception as e:
+        st.error(f"Error generating PDF: {e}")
+        return None
 
 # Streamlit UI
-st.set_page_config(page_title="🏏 Cricket Analytics", layout="wide")
+def main():
+    st.set_page_config(page_title="🏏 Cricket Analytics", layout="wide", page_icon="🏏")
 
-st.title("🏏 Cricket Match Analytics Dashboard")
+    # Custom CSS for enhanced UI
+    st.markdown("""
+    <style>
+    .reportview-container {
+        background-color: #f0f2f6;
+    }
+    .sidebar .sidebar-content {
+        background-color: #ffffff;
+        color: #262730;
+    }
+    .stMetric {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        padding: 10px 20px;
+    }
+    .stButton>button:hover {
+        background-color: #45a049;
+    }
+    h1, h2, h3 {
+        color: #1e3a8a;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Load Matches
-matches = load_match_list()
-match_id = st.selectbox("Select Match ID", list(matches.keys()), format_func=lambda x: matches[x])
+    st.title("🏏 Cricket Match Analytics Dashboard")
+    st.markdown("---")
 
-if match_id:
-    base_url = st.secrets["api_url"]
-    all_data = fetch_match_data(match_id, base_url)
-    df_commentary, df_wagon, df_statistics = create_dataframes(all_data)
+    # Load Matches
+    matches = load_match_list()
+    match_id = st.selectbox("Select Match", list(matches.keys()), format_func=lambda x: matches[x])
 
-    # KPI Metrics
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Runs", df_statistics.iloc[0]["runs"])
-    col2.metric("Wickets", df_statistics.iloc[0]["wickets"])
-    col3.metric("Overs", df_statistics.iloc[0]["overs"])
-    col4.metric("Run Rate", df_statistics.iloc[0]["statistics"]["runrates"][-1]["runrate"])
+    if match_id:
+        # Add a spinner during data loading
+        with st.spinner('Fetching match data...'):
+            base_url = st.secrets["api_url"]
+            all_data = fetch_match_data(match_id, base_url)
+        
+        if all_data:
+            df_commentary, df_wagon, df_statistics = create_dataframes(all_data)
 
-    # Generate Visualizations
-    st.subheader("📊 Match Analysis")
-    plot_manhattan_chart(df_statistics, None)
-    plot_worm_chart(df_statistics, None)
-    plot_boundary_chart(df_statistics, None)
-    plot_bowler_economy_chart(df_statistics, None)
+            # KPI Metrics with improved styling
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Runs", df_statistics.iloc[0]["runs"])
+            with col2:
+                st.metric("Wickets", df_statistics.iloc[0]["wickets"])
+            with col3:
+                st.metric("Overs", df_statistics.iloc[0]["overs"])
+            with col4:
+                st.metric("Run Rate", df_statistics.iloc[0]["statistics"]["runrates"][-1]["runrate"])
 
-    # Generate Report Button
-    if st.button("📄 Generate PDF Report"):
-        pdf_file = generate_pdf(df_statistics)
-        with open(pdf_file, "rb") as file:
-            st.download_button("Download Report", file, "match_report.pdf", mime="application/pdf")
+            st.markdown("---")
 
+            # Generate Visualizations
+            st.subheader("📊 Match Analysis")
+            
+            # Create tabs for different visualizations
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "Manhattan Chart", 
+                "Worm Chart", 
+                "Boundary Analysis", 
+                "Bowler Economy"
+            ])
+
+            with tab1:
+                plot_manhattan_chart(df_statistics, None)
+            
+            with tab2:
+                plot_worm_chart(df_statistics, None)
+            
+            with tab3:
+                plot_boundary_chart(df_statistics, None)
+            
+            with tab4:
+                plot_bowler_economy_chart(df_statistics, None)
+
+            # Generate Report Button
+            st.markdown("---")
+            if st.button("📄 Generate PDF Report"):
+                pdf_file = generate_pdf(df_statistics)
+                if pdf_file:
+                    with open(pdf_file, "rb") as file:
+                        st.download_button(
+                            "Download Detailed Match Report", 
+                            file, 
+                            "match_report.pdf", 
+                            mime="application/pdf",
+                            help="A comprehensive PDF report with match statistics and charts"
+                        )
+                else:
+                    st.error("Failed to generate PDF report. Please try again.")
+        else:
+            st.error("Unable to fetch match data. Please check your connection or try another match.")
+
+if __name__ == "__main__":
+    main()
 # import streamlit as st
 # import requests
 # import json
