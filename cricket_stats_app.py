@@ -111,14 +111,33 @@ def plot_partnership_chart(df_statistics):
     if df_statistics.empty:
         st.warning("No partnership data available.")
         return
-    df_partnerships = pd.DataFrame(df_statistics.iloc[0]["statistics"]["partnership"])
+    
+    # Ensure partnerships data exists
+    partnerships_data = df_statistics.iloc[0].get("statistics", {}).get("partnership", [])
+    if not partnerships_data:
+        st.warning("No valid partnership data found.")
+        return
+
+    # Convert into DataFrame
+    df_partnerships = pd.DataFrame(partnerships_data)
+
+    # Ensure necessary fields exist
+    if "batsmen" not in df_partnerships or "runs" not in df_partnerships:
+        st.warning("Missing required fields in partnership data.")
+        return
+
+    # Convert batsmen info into a readable format
+    df_partnerships["batsmen_pair"] = df_partnerships["batsmen"].apply(lambda x: f"{x[0]['batsman_id']} & {x[1]['batsman_id']}" if len(x) == 2 else "Unknown")
+
+    # Plot
     plt.figure(figsize=(8, 4))
-    sns.barplot(x=[str(x["batsmen"]) for x in df_partnerships], y=[x["runs"] for x in df_partnerships], color="orange")
+    sns.barplot(x=df_partnerships["batsmen_pair"], y=df_partnerships["runs"], color="orange")
     plt.xticks(rotation=45)
     plt.xlabel("Partnerships")
     plt.ylabel("Runs")
     plt.title("Partnership Contributions")
     st.pyplot(plt)
+
 
 # Dismissal Breakdown
 def plot_dismissal_chart(df_statistics):
