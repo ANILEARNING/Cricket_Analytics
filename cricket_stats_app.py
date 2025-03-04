@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import json
 import pandas as pd
-import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
@@ -24,11 +23,7 @@ def fetch_data(url):
 
 # Fetch & Store Data for Selected Match
 def fetch_match_data(match_id, base_url):
-    paths = {
-        "commentary": "innings%2F1%2Fcommentary",
-        "wagon": "wagons",
-        "statistics": "statistics"
-    }
+    paths = {"commentary": "innings%2F1%2Fcommentary", "wagon": "wagons", "statistics": "statistics"}
     all_data = {}
     for key, path in paths.items():
         url = base_url.replace("{MatchId}", match_id).replace("{Path}", path)
@@ -39,120 +34,46 @@ def fetch_match_data(match_id, base_url):
 
 # Create DataFrames
 def create_dataframes(all_data):
-    # Safely extract commentary data
-    commentary_data = all_data.get("commentary", {}).get("response", [])
-    df_commentary = pd.DataFrame(commentary_data) if isinstance(commentary_data, list) else pd.DataFrame()
-
-    # Safely extract wagon data
-    wagon_data = all_data.get("wagon", {}).get("response", {}).get("innings", [])
-    df_wagon = pd.DataFrame(wagon_data) if isinstance(wagon_data, list) else pd.DataFrame()
-
-    # Safely extract statistics data
-    statistics_data = all_data.get("statistics", {}).get("response", {}).get("innings", [])
-    df_statistics = pd.DataFrame(statistics_data) if isinstance(statistics_data, list) else pd.DataFrame()
-
+    df_commentary = pd.DataFrame(all_data.get("commentary", {}).get("response", []))
+    df_wagon = pd.DataFrame(all_data.get("wagon", {}).get("response", {}).get("innings", []))
+    df_statistics = pd.DataFrame(all_data.get("statistics", {}).get("response", {}).get("innings", []))
     return df_commentary, df_wagon, df_statistics
 
-
-# Manhattan Chart (Runs per Over)
-def plot_manhattan_chart(df_statistics):
-    if df_statistics.empty:
-        st.warning("No statistics available.")
-        return
+# Plot Charts
+def plot_manhattan_chart(df_statistics, pdf):
     df_manhattan = pd.DataFrame(df_statistics.iloc[0]["statistics"]["manhattan"])
-    plt.figure(figsize=(8, 4))
-    sns.barplot(x="over", y="runs", data=df_manhattan, color="blue")
-    plt.xlabel("Overs")
-    plt.ylabel("Runs")
-    plt.title("Manhattan Chart - Runs per Over")
-    st.pyplot(plt)
+    fig, ax = plt.subplots(figsize=(6, 3))
+    sns.barplot(x="over", y="runs", data=df_manhattan, color="blue", ax=ax)
+    ax.set_title("Manhattan Chart - Runs per Over")
+    st.pyplot(fig)
+    pdf.image("manhattan_chart.png", x=10, y=50, w=180)  # Add to PDF
 
-# Worm Chart (Total Runs over Time)
-def plot_worm_chart(df_statistics):
-    if df_statistics.empty:
-        st.warning("No statistics available.")
-        return
+def plot_worm_chart(df_statistics, pdf):
     df_worm = pd.DataFrame(df_statistics.iloc[0]["statistics"]["worm"])
-    plt.figure(figsize=(8, 4))
-    sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green")
-    plt.xlabel("Overs")
-    plt.ylabel("Total Runs")
-    plt.title("Worm Chart - Runs Progression")
-    st.pyplot(plt)
+    fig, ax = plt.subplots(figsize=(6, 3))
+    sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green", ax=ax)
+    ax.set_title("Worm Chart - Runs Progression")
+    st.pyplot(fig)
+    pdf.image("worm_chart.png", x=10, y=100, w=180)  # Add to PDF
 
-# Run Rate Progression
-def plot_run_rate_chart(df_statistics):
-    if df_statistics.empty:
-        st.warning("No statistics available.")
-        return
-    df_runrate = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runrates"])
-    plt.figure(figsize=(8, 4))
-    sns.lineplot(x="over", y="runrate", data=df_runrate, marker="o", color="red")
-    plt.xlabel("Overs")
-    plt.ylabel("Run Rate")
-    plt.title("Run Rate Progression")
-    st.pyplot(plt)
+def plot_boundary_chart(df_statistics, pdf):
+    df_boundary = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runtypes"])
+    df_boundary = df_boundary[df_boundary["key"].isin(["run4", "run6"])]
+    fig, ax = plt.subplots(figsize=(6, 3))
+    sns.barplot(x="name", y="value", data=df_boundary, color="orange", ax=ax)
+    ax.set_title("Boundary Breakdown (Fours & Sixes)")
+    st.pyplot(fig)
+    pdf.image("boundary_chart.png", x=10, y=150, w=180)  # Add to PDF
 
-# Wagon Wheel (Shot Placement)
-def plot_wagon_wheel(df_wagon):
-    if df_wagon.empty:
-        st.warning("No wagon data available.")
-        return
-    df_wagons = pd.DataFrame(df_wagon.iloc[0]["wagons"], columns=["batsman_id", "bowler_id", "over", "bat_run", "team_run", "x", "y", "zone_id", "event_name", "unique_over"])
-    plt.figure(figsize=(6, 6))
-    sns.scatterplot(x=df_wagons["x"], y=df_wagons["y"], hue=df_wagons["event_name"], palette="tab10", edgecolor="black")
-    plt.xlabel("X Position")
-    plt.ylabel("Y Position")
-    plt.title("Wagon Wheel - Shot Placement")
-    st.pyplot(plt)
+def plot_bowler_economy_chart(df_statistics, pdf):
+    df_bowlers = pd.DataFrame(df_statistics.iloc[0]["bowlers"])
+    fig, ax = plt.subplots(figsize=(6, 3))
+    sns.barplot(x="name", y="econ", data=df_bowlers, color="red", ax=ax)
+    ax.set_title("Bowler Economy Rate")
+    st.pyplot(fig)
+    pdf.image("bowler_economy.png", x=10, y=200, w=180)  # Add to PDF
 
-# Partnership Analysis
-def plot_partnership_chart(df_statistics):
-    if df_statistics.empty:
-        st.warning("No partnership data available.")
-        return
-    
-    # Ensure partnerships data exists
-    partnerships_data = df_statistics.iloc[0].get("statistics", {}).get("partnership", [])
-    if not partnerships_data:
-        st.warning("No valid partnership data found.")
-        return
-
-    # Convert into DataFrame
-    df_partnerships = pd.DataFrame(partnerships_data)
-
-    # Ensure necessary fields exist
-    if "batsmen" not in df_partnerships or "runs" not in df_partnerships:
-        st.warning("Missing required fields in partnership data.")
-        return
-
-    # Convert batsmen info into a readable format
-    df_partnerships["batsmen_pair"] = df_partnerships["batsmen"].apply(lambda x: f"{x[0]['batsman_id']} & {x[1]['batsman_id']}" if len(x) == 2 else "Unknown")
-
-    # Plot
-    plt.figure(figsize=(8, 4))
-    sns.barplot(x=df_partnerships["batsmen_pair"], y=df_partnerships["runs"], color="orange")
-    plt.xticks(rotation=45)
-    plt.xlabel("Partnerships")
-    plt.ylabel("Runs")
-    plt.title("Partnership Contributions")
-    st.pyplot(plt)
-
-
-# Dismissal Breakdown
-def plot_dismissal_chart(df_statistics):
-    if df_statistics.empty:
-        st.warning("No dismissal data available.")
-        return
-    df_dismissals = pd.DataFrame(df_statistics.iloc[0]["statistics"]["wickets"])
-    plt.figure(figsize=(8, 4))
-    sns.barplot(x="name", y="value", data=df_dismissals, color="purple")
-    plt.xlabel("Dismissal Type")
-    plt.ylabel("Count")
-    plt.title("Types of Wickets")
-    st.pyplot(plt)
-
-# Generate PDF Report
+# Generate PDF Report with Charts & KPIs
 def generate_pdf(df_statistics):
     pdf = FPDF()
     pdf.add_page()
@@ -160,17 +81,30 @@ def generate_pdf(df_statistics):
     pdf.cell(200, 10, "Cricket Match Report", ln=True, align="C")
     pdf.ln(10)
 
+    # KPIs
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(200, 10, "Match Summary", ln=True)
+    pdf.cell(200, 10, "Key Performance Indicators (KPIs)", ln=True)
+    pdf.set_font("Arial", size=10)
+    innings = df_statistics.iloc[0]
+    pdf.cell(200, 10, f"Total Runs: {innings['runs']}", ln=True)
+    pdf.cell(200, 10, f"Total Wickets: {innings['wickets']}", ln=True)
+    pdf.cell(200, 10, f"Overs Played: {innings['overs']}", ln=True)
+    pdf.cell(200, 10, f"Run Rate: {innings['statistics']['runrates'][-1]['runrate']}", ln=True)
+    pdf.cell(200, 10, f"Fours: {sum(x['value'] for x in innings['statistics']['runtypes'] if x['key'] == 'run4')}", ln=True)
+    pdf.cell(200, 10, f"Sixes: {sum(x['value'] for x in innings['statistics']['runtypes'] if x['key'] == 'run6')}", ln=True)
     
-    for _, row in df_statistics.iterrows():
-        pdf.set_font("Arial", size=10)
-        pdf.cell(200, 10, f"{row['name']} - {row['runs']} Runs, {row['overs']} Overs, {row['wickets']} Wickets", ln=True)
-    
+    # Charts
+    plot_manhattan_chart(df_statistics, pdf)
+    plot_worm_chart(df_statistics, pdf)
+    plot_boundary_chart(df_statistics, pdf)
+    plot_bowler_economy_chart(df_statistics, pdf)
+
     pdf.output("match_report.pdf")
     return "match_report.pdf"
 
 # Streamlit UI
+st.set_page_config(page_title="🏏 Cricket Analytics", layout="wide")
+
 st.title("🏏 Cricket Match Analytics Dashboard")
 
 # Load Matches
@@ -182,13 +116,19 @@ if match_id:
     all_data = fetch_match_data(match_id, base_url)
     df_commentary, df_wagon, df_statistics = create_dataframes(all_data)
 
+    # KPI Metrics
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Runs", df_statistics.iloc[0]["runs"])
+    col2.metric("Wickets", df_statistics.iloc[0]["wickets"])
+    col3.metric("Overs", df_statistics.iloc[0]["overs"])
+    col4.metric("Run Rate", df_statistics.iloc[0]["statistics"]["runrates"][-1]["runrate"])
+
     # Generate Visualizations
-    plot_manhattan_chart(df_statistics)
-    plot_worm_chart(df_statistics)
-    plot_run_rate_chart(df_statistics)
-    plot_wagon_wheel(df_wagon)
-    plot_partnership_chart(df_statistics)
-    plot_dismissal_chart(df_statistics)
+    st.subheader("📊 Match Analysis")
+    plot_manhattan_chart(df_statistics, None)
+    plot_worm_chart(df_statistics, None)
+    plot_boundary_chart(df_statistics, None)
+    plot_bowler_economy_chart(df_statistics, None)
 
     # Generate Report Button
     if st.button("📄 Generate PDF Report"):
@@ -196,6 +136,206 @@ if match_id:
         with open(pdf_file, "rb") as file:
             st.download_button("Download Report", file, "match_report.pdf", mime="application/pdf")
 
+
+
+# import streamlit as st
+# import requests
+# import json
+# import pandas as pd
+# import os
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# from fpdf import FPDF
+
+# # Load Match List
+# def load_match_list():
+#     with open("match_list.json", "r") as file:
+#         return json.load(file)
+
+# # Fetch Data
+# def fetch_data(url):
+#     try:
+#         response = requests.get(url)
+#         response.raise_for_status()
+#         return response.json()
+#     except requests.exceptions.RequestException as e:
+#         st.error(f"Error fetching data: {e}")
+#         return None
+
+# # Fetch & Store Data for Selected Match
+# def fetch_match_data(match_id, base_url):
+#     paths = {
+#         "commentary": "innings%2F1%2Fcommentary",
+#         "wagon": "wagons",
+#         "statistics": "statistics"
+#     }
+#     all_data = {}
+#     for key, path in paths.items():
+#         url = base_url.replace("{MatchId}", match_id).replace("{Path}", path)
+#         data = fetch_data(url)
+#         if data:
+#             all_data[key] = data
+#     return all_data
+
+# # Create DataFrames
+# def create_dataframes(all_data):
+#     # Safely extract commentary data
+#     commentary_data = all_data.get("commentary", {}).get("response", [])
+#     df_commentary = pd.DataFrame(commentary_data) if isinstance(commentary_data, list) else pd.DataFrame()
+
+#     # Safely extract wagon data
+#     wagon_data = all_data.get("wagon", {}).get("response", {}).get("innings", [])
+#     df_wagon = pd.DataFrame(wagon_data) if isinstance(wagon_data, list) else pd.DataFrame()
+
+#     # Safely extract statistics data
+#     statistics_data = all_data.get("statistics", {}).get("response", {}).get("innings", [])
+#     df_statistics = pd.DataFrame(statistics_data) if isinstance(statistics_data, list) else pd.DataFrame()
+
+#     return df_commentary, df_wagon, df_statistics
+
+
+# # Manhattan Chart (Runs per Over)
+# def plot_manhattan_chart(df_statistics):
+#     if df_statistics.empty:
+#         st.warning("No statistics available.")
+#         return
+#     df_manhattan = pd.DataFrame(df_statistics.iloc[0]["statistics"]["manhattan"])
+#     plt.figure(figsize=(8, 4))
+#     sns.barplot(x="over", y="runs", data=df_manhattan, color="blue")
+#     plt.xlabel("Overs")
+#     plt.ylabel("Runs")
+#     plt.title("Manhattan Chart - Runs per Over")
+#     st.pyplot(plt)
+
+# # Worm Chart (Total Runs over Time)
+# def plot_worm_chart(df_statistics):
+#     if df_statistics.empty:
+#         st.warning("No statistics available.")
+#         return
+#     df_worm = pd.DataFrame(df_statistics.iloc[0]["statistics"]["worm"])
+#     plt.figure(figsize=(8, 4))
+#     sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green")
+#     plt.xlabel("Overs")
+#     plt.ylabel("Total Runs")
+#     plt.title("Worm Chart - Runs Progression")
+#     st.pyplot(plt)
+
+# # Run Rate Progression
+# def plot_run_rate_chart(df_statistics):
+#     if df_statistics.empty:
+#         st.warning("No statistics available.")
+#         return
+#     df_runrate = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runrates"])
+#     plt.figure(figsize=(8, 4))
+#     sns.lineplot(x="over", y="runrate", data=df_runrate, marker="o", color="red")
+#     plt.xlabel("Overs")
+#     plt.ylabel("Run Rate")
+#     plt.title("Run Rate Progression")
+#     st.pyplot(plt)
+
+# # Wagon Wheel (Shot Placement)
+# def plot_wagon_wheel(df_wagon):
+#     if df_wagon.empty:
+#         st.warning("No wagon data available.")
+#         return
+#     df_wagons = pd.DataFrame(df_wagon.iloc[0]["wagons"], columns=["batsman_id", "bowler_id", "over", "bat_run", "team_run", "x", "y", "zone_id", "event_name", "unique_over"])
+#     plt.figure(figsize=(6, 6))
+#     sns.scatterplot(x=df_wagons["x"], y=df_wagons["y"], hue=df_wagons["event_name"], palette="tab10", edgecolor="black")
+#     plt.xlabel("X Position")
+#     plt.ylabel("Y Position")
+#     plt.title("Wagon Wheel - Shot Placement")
+#     st.pyplot(plt)
+
+# # Partnership Analysis
+# def plot_partnership_chart(df_statistics):
+#     if df_statistics.empty:
+#         st.warning("No partnership data available.")
+#         return
+    
+#     # Ensure partnerships data exists
+#     partnerships_data = df_statistics.iloc[0].get("statistics", {}).get("partnership", [])
+#     if not partnerships_data:
+#         st.warning("No valid partnership data found.")
+#         return
+
+#     # Convert into DataFrame
+#     df_partnerships = pd.DataFrame(partnerships_data)
+
+#     # Ensure necessary fields exist
+#     if "batsmen" not in df_partnerships or "runs" not in df_partnerships:
+#         st.warning("Missing required fields in partnership data.")
+#         return
+
+#     # Convert batsmen info into a readable format
+#     df_partnerships["batsmen_pair"] = df_partnerships["batsmen"].apply(lambda x: f"{x[0]['batsman_id']} & {x[1]['batsman_id']}" if len(x) == 2 else "Unknown")
+
+#     # Plot
+#     plt.figure(figsize=(8, 4))
+#     sns.barplot(x=df_partnerships["batsmen_pair"], y=df_partnerships["runs"], color="orange")
+#     plt.xticks(rotation=45)
+#     plt.xlabel("Partnerships")
+#     plt.ylabel("Runs")
+#     plt.title("Partnership Contributions")
+#     st.pyplot(plt)
+
+
+# # Dismissal Breakdown
+# def plot_dismissal_chart(df_statistics):
+#     if df_statistics.empty:
+#         st.warning("No dismissal data available.")
+#         return
+#     df_dismissals = pd.DataFrame(df_statistics.iloc[0]["statistics"]["wickets"])
+#     plt.figure(figsize=(8, 4))
+#     sns.barplot(x="name", y="value", data=df_dismissals, color="purple")
+#     plt.xlabel("Dismissal Type")
+#     plt.ylabel("Count")
+#     plt.title("Types of Wickets")
+#     st.pyplot(plt)
+
+# # Generate PDF Report
+# def generate_pdf(df_statistics):
+#     pdf = FPDF()
+#     pdf.add_page()
+#     pdf.set_font("Arial", "B", 16)
+#     pdf.cell(200, 10, "Cricket Match Report", ln=True, align="C")
+#     pdf.ln(10)
+
+#     pdf.set_font("Arial", "B", 12)
+#     pdf.cell(200, 10, "Match Summary", ln=True)
+    
+#     for _, row in df_statistics.iterrows():
+#         pdf.set_font("Arial", size=10)
+#         pdf.cell(200, 10, f"{row['name']} - {row['runs']} Runs, {row['overs']} Overs, {row['wickets']} Wickets", ln=True)
+    
+#     pdf.output("match_report.pdf")
+#     return "match_report.pdf"
+
+# # Streamlit UI
+# st.title("🏏 Cricket Match Analytics Dashboard")
+
+# # Load Matches
+# matches = load_match_list()
+# match_id = st.selectbox("Select Match ID", list(matches.keys()), format_func=lambda x: matches[x])
+
+# if match_id:
+#     base_url = st.secrets["api_url"]
+#     all_data = fetch_match_data(match_id, base_url)
+#     df_commentary, df_wagon, df_statistics = create_dataframes(all_data)
+
+#     # Generate Visualizations
+#     plot_manhattan_chart(df_statistics)
+#     plot_worm_chart(df_statistics)
+#     plot_run_rate_chart(df_statistics)
+#     plot_wagon_wheel(df_wagon)
+#     plot_partnership_chart(df_statistics)
+#     plot_dismissal_chart(df_statistics)
+
+#     # Generate Report Button
+#     if st.button("📄 Generate PDF Report"):
+#         pdf_file = generate_pdf(df_statistics)
+#         with open(pdf_file, "rb") as file:
+#             st.download_button("Download Report", file, "match_report.pdf", mime="application/pdf")
+# +++++++++++++V1
 
 # import streamlit as st
 # import pandas as pd
