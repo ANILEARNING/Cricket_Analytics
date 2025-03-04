@@ -12,9 +12,9 @@ nltk.download('vader_lexicon')
 sia = SentimentIntensityAnalyzer()
 
 # Load JSON Data
-def load_data(json_file):
-    with open(json_file, 'r') as file:
-        data = json.load(file)
+def load_data(uploaded_file):
+    """Reads the uploaded JSON file from Streamlit"""
+    data = json.load(uploaded_file)  # Directly load JSON from file-like object
     return data['response']
 
 # Extract key details
