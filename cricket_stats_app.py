@@ -118,8 +118,19 @@ def plot_bowler_economy_chart(df_statistics, pdf=None):
     if df_statistics.empty:
         st.warning("No statistics available.")
         return
-    df_bowlers = pd.DataFrame(df_statistics.iloc[0]["bowlers"])
 
+    # Check if 'bowlers' key exists
+    if "bowlers" not in df_statistics.iloc[0]["statistics"]:
+        st.warning("No bowler data available.")
+        return
+    
+    df_bowlers = pd.DataFrame(df_statistics.iloc[0]["statistics"]["bowlers"])
+
+    if df_bowlers.empty:
+        st.warning("No bowler data available.")
+        return
+
+    # Plot Bowler Economy
     fig, ax = plt.subplots(figsize=(6, 3))
     sns.barplot(x="name", y="econ", data=df_bowlers, color="red", ax=ax)
     ax.set_title("Bowler Economy Rate")
@@ -127,6 +138,7 @@ def plot_bowler_economy_chart(df_statistics, pdf=None):
 
     if pdf:
         save_fig_to_pdf(fig, pdf, x=10, y=200)
+
 
 # Generate PDF Report with Charts & KPIs
 def generate_pdf(df_statistics):
