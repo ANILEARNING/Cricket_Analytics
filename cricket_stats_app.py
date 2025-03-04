@@ -34,9 +34,26 @@ def fetch_match_data(match_id, base_url):
 
 # Create DataFrames
 def create_dataframes(all_data):
-    df_commentary = pd.DataFrame(all_data.get("commentary", {}).get("response", []))
-    df_wagon = pd.DataFrame(all_data.get("wagon", {}).get("response", {}).get("innings", []))
-    df_statistics = pd.DataFrame(all_data.get("statistics", {}).get("response", {}).get("innings", []))
+    # Safely extract commentary data
+    commentary_data = all_data.get("commentary", {}).get("response", [])
+
+    if isinstance(commentary_data, list):
+        try:
+            df_commentary = pd.DataFrame(commentary_data)
+        except ValueError:
+            # Handle missing or irregular data
+            df_commentary = pd.DataFrame.from_dict(commentary_data, orient="index").reset_index()
+    else:
+        df_commentary = pd.DataFrame()  # Empty DataFrame if data is not valid
+
+    # Safely extract wagon data
+    wagon_data = all_data.get("wagon", {}).get("response", {}).get("innings", [])
+    df_wagon = pd.DataFrame(wagon_data) if isinstance(wagon_data, list) else pd.DataFrame()
+
+    # Safely extract statistics data
+    statistics_data = all_data.get("statistics", {}).get("response", {}).get("innings", [])
+    df_statistics = pd.DataFrame(statistics_data) if isinstance(statistics_data, list) else pd.DataFrame()
+
     return df_commentary, df_wagon, df_statistics
 
 # Plot Charts
