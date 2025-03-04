@@ -1,3 +1,7 @@
 streamlit
-seaborn
 pandas
+matplotlib
+seaborn
+fpdf
+nltk
+
