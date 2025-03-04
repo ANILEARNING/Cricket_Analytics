@@ -1,60 +1,132 @@
 import streamlit as st
-import pandas as pd
+import requests
 import json
+import pandas as pd
+import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
-import nltk
-from nltk.sentiment import SentimentIntensityAnalyzer
 
-# Download Sentiment Analysis Tool
-nltk.download('vader_lexicon')
-sia = SentimentIntensityAnalyzer()
+# Load Match List
+def load_match_list():
+    with open("match_list.json", "r") as file:
+        return json.load(file)
 
-# Load JSON Data
-def load_data(uploaded_file):
-    """Reads the uploaded JSON file from Streamlit"""
-    data = json.load(uploaded_file)  # Directly load JSON from file-like object
-    return data['response']
+# Fetch Data
+def fetch_data(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching data: {e}")
+        return None
 
-# Extract key details
-def get_match_summary(data):
-    inning = data['inning']
-    return {
-        "Team": inning['name'],
-        "Total Runs": inning['scores'],
-        "Overs": inning['scores_full'].split('(')[-1].replace(")", ""),
-        "Wickets": len([b for b in inning['batsmen'] if b['how_out']])
+# Fetch & Store Data for Selected Match
+def fetch_match_data(match_id, base_url):
+    paths = {
+        "commentary": "innings%2F1%2Fcommentary",
+        "wagon": "wagons",
+        "statistics": "statistics"
     }
+    all_data = {}
+    for key, path in paths.items():
+        url = base_url.replace("{MatchId}", match_id).replace("{Path}", path)
+        data = fetch_data(url)
+        if data:
+            all_data[key] = data
+    return all_data
 
-# Get Top Players
-def get_top_batsman(data):
-    batsmen = data['inning']['batsmen']
-    df = pd.DataFrame(batsmen)
-    df['runs'] = df['runs'].astype(int)
-    df['strike_rate'] = df['strike_rate'].astype(float)
-    return df[['name', 'runs', 'balls_faced', 'strike_rate']].sort_values(by='runs', ascending=False)
+# Create DataFrames
+def create_dataframes(all_data):
+    df_commentary = pd.DataFrame(all_data.get("commentary", {}).get("response", []))
+    df_wagon = pd.DataFrame(all_data.get("wagon", {}).get("response", {}).get("innings", []))
+    df_statistics = pd.DataFrame(all_data.get("statistics", {}).get("response", {}).get("innings", []))
+    return df_commentary, df_wagon, df_statistics
 
-# Get Top Bowlers
-def get_top_bowler(data):
-    bowlers = data['inning']['bowlers']
-    df = pd.DataFrame(bowlers)
-    df['wickets'] = df['wickets'].astype(int)
-    df['econ'] = df['econ'].astype(float)
-    return df[['name', 'overs', 'runs_conceded', 'wickets', 'econ']].sort_values(by='wickets', ascending=False)
+# Manhattan Chart (Runs per Over)
+def plot_manhattan_chart(df_statistics):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
+    df_manhattan = pd.DataFrame(df_statistics.iloc[0]["statistics"]["manhattan"])
+    plt.figure(figsize=(8, 4))
+    sns.barplot(x="over", y="runs", data=df_manhattan, color="blue")
+    plt.xlabel("Overs")
+    plt.ylabel("Runs")
+    plt.title("Manhattan Chart - Runs per Over")
+    st.pyplot(plt)
 
-# Sentiment Analysis on Commentary
-def get_sentiment_analysis(data):
-    comments = [c['commentary'] for c in data['commentaries'] if 'commentary' in c]
-    sentiments = [sia.polarity_scores(c)['compound'] for c in comments]
-    return pd.DataFrame({'Commentary': comments, 'Sentiment': sentiments})
+# Worm Chart (Total Runs over Time)
+def plot_worm_chart(df_statistics):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
+    df_worm = pd.DataFrame(df_statistics.iloc[0]["statistics"]["worm"])
+    plt.figure(figsize=(8, 4))
+    sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green")
+    plt.xlabel("Overs")
+    plt.ylabel("Total Runs")
+    plt.title("Worm Chart - Runs Progression")
+    st.pyplot(plt)
+
+# Run Rate Progression
+def plot_run_rate_chart(df_statistics):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
+    df_runrate = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runrates"])
+    plt.figure(figsize=(8, 4))
+    sns.lineplot(x="over", y="runrate", data=df_runrate, marker="o", color="red")
+    plt.xlabel("Overs")
+    plt.ylabel("Run Rate")
+    plt.title("Run Rate Progression")
+    st.pyplot(plt)
+
+# Wagon Wheel (Shot Placement)
+def plot_wagon_wheel(df_wagon):
+    if df_wagon.empty:
+        st.warning("No wagon data available.")
+        return
+    df_wagons = pd.DataFrame(df_wagon.iloc[0]["wagons"], columns=["batsman_id", "bowler_id", "over", "bat_run", "team_run", "x", "y", "zone_id", "event_name", "unique_over"])
+    plt.figure(figsize=(6, 6))
+    sns.scatterplot(x=df_wagons["x"], y=df_wagons["y"], hue=df_wagons["event_name"], palette="tab10", edgecolor="black")
+    plt.xlabel("X Position")
+    plt.ylabel("Y Position")
+    plt.title("Wagon Wheel - Shot Placement")
+    st.pyplot(plt)
+
+# Partnership Analysis
+def plot_partnership_chart(df_statistics):
+    if df_statistics.empty:
+        st.warning("No partnership data available.")
+        return
+    df_partnerships = pd.DataFrame(df_statistics.iloc[0]["statistics"]["partnership"])
+    plt.figure(figsize=(8, 4))
+    sns.barplot(x=[str(x["batsmen"]) for x in df_partnerships], y=[x["runs"] for x in df_partnerships], color="orange")
+    plt.xticks(rotation=45)
+    plt.xlabel("Partnerships")
+    plt.ylabel("Runs")
+    plt.title("Partnership Contributions")
+    st.pyplot(plt)
+
+# Dismissal Breakdown
+def plot_dismissal_chart(df_statistics):
+    if df_statistics.empty:
+        st.warning("No dismissal data available.")
+        return
+    df_dismissals = pd.DataFrame(df_statistics.iloc[0]["statistics"]["wickets"])
+    plt.figure(figsize=(8, 4))
+    sns.barplot(x="name", y="value", data=df_dismissals, color="purple")
+    plt.xlabel("Dismissal Type")
+    plt.ylabel("Count")
+    plt.title("Types of Wickets")
+    st.pyplot(plt)
 
 # Generate PDF Report
-def generate_pdf(match_summary, batsmen_df, bowlers_df, sentiment_df):
+def generate_pdf(df_statistics):
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    
     pdf.set_font("Arial", "B", 16)
     pdf.cell(200, 10, "Cricket Match Report", ln=True, align="C")
     pdf.ln(10)
@@ -62,69 +134,168 @@ def generate_pdf(match_summary, batsmen_df, bowlers_df, sentiment_df):
     pdf.set_font("Arial", "B", 12)
     pdf.cell(200, 10, "Match Summary", ln=True)
     
-    pdf.set_font("Arial", size=10)
-    for key, value in match_summary.items():
-        pdf.cell(200, 10, f"{key}: {value}", ln=True)
-
-    pdf.ln(10)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(200, 10, "Top Batsmen", ln=True)
+    for _, row in df_statistics.iterrows():
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 10, f"{row['name']} - {row['runs']} Runs, {row['overs']} Overs, {row['wickets']} Wickets", ln=True)
     
-    pdf.set_font("Arial", size=10)
-    for index, row in batsmen_df.iterrows():
-        pdf.cell(200, 10, f"{row['name']} - {row['runs']} Runs, SR: {row['strike_rate']}", ln=True)
-
-    pdf.ln(10)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(200, 10, "Top Bowlers", ln=True)
-    
-    pdf.set_font("Arial", size=10)
-    for index, row in bowlers_df.iterrows():
-        pdf.cell(200, 10, f"{row['name']} - {row['wickets']} Wickets, Econ: {row['econ']}", ln=True)
-
-    pdf.ln(10)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(200, 10, "Commentary Sentiment Analysis", ln=True)
-    
-    pdf.set_font("Arial", size=10)
-    positive = sentiment_df[sentiment_df['Sentiment'] > 0.2].shape[0]
-    negative = sentiment_df[sentiment_df['Sentiment'] < -0.2].shape[0]
-    
-    pdf.cell(200, 10, f"Positive Comments: {positive}, Negative Comments: {negative}", ln=True)
-    
-    pdf.output("cricket_report.pdf")
-    return "cricket_report.pdf"
+    pdf.output("match_report.pdf")
+    return "match_report.pdf"
 
 # Streamlit UI
-st.title("🏏 Cricket Match Report Generator")
+st.title("🏏 Cricket Match Analytics Dashboard")
 
-uploaded_file = st.file_uploader("Upload JSON match data", type=['json'])
+# Load Matches
+matches = load_match_list()
+match_id = st.selectbox("Select Match ID", list(matches.keys()), format_func=lambda x: matches[x])
 
-if uploaded_file:
-    data = load_data(uploaded_file)
+if match_id:
+    base_url = st.secrets["api_url"]
+    all_data = fetch_match_data(match_id, base_url)
+    df_commentary, df_wagon, df_statistics = create_dataframes(all_data)
 
-    st.subheader("📊 Match Summary")
-    match_summary = get_match_summary(data)
-    st.json(match_summary)
+    # Generate Visualizations
+    plot_manhattan_chart(df_statistics)
+    plot_worm_chart(df_statistics)
+    plot_run_rate_chart(df_statistics)
+    plot_wagon_wheel(df_wagon)
+    plot_partnership_chart(df_statistics)
+    plot_dismissal_chart(df_statistics)
 
-    st.subheader("🏏 Top Batsmen")
-    batsmen_df = get_top_batsman(data)
-    st.dataframe(batsmen_df)
-
-    st.subheader("🎯 Top Bowlers")
-    bowlers_df = get_top_bowler(data)
-    st.dataframe(bowlers_df)
-
-    st.subheader("📢 Sentiment Analysis on Commentary")
-    sentiment_df = get_sentiment_analysis(data)
-    st.dataframe(sentiment_df)
-
-    # Generate PDF
-    if st.button("📄 Generate Report"):
-        pdf_file = generate_pdf(match_summary, batsmen_df, bowlers_df, sentiment_df)
+    # Generate Report Button
+    if st.button("📄 Generate PDF Report"):
+        pdf_file = generate_pdf(df_statistics)
         with open(pdf_file, "rb") as file:
             st.download_button("Download Report", file, "match_report.pdf", mime="application/pdf")
 
+
+# import streamlit as st
+# import pandas as pd
+# import json
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# from fpdf import FPDF
+# import nltk
+# from nltk.sentiment import SentimentIntensityAnalyzer
+
+# # Download Sentiment Analysis Tool
+# nltk.download('vader_lexicon')
+# sia = SentimentIntensityAnalyzer()
+
+# # Load JSON Data
+# def load_data(uploaded_file):
+#     """Reads the uploaded JSON file from Streamlit"""
+#     data = json.load(uploaded_file)  # Directly load JSON from file-like object
+#     return data['response']
+
+# # Extract key details
+# def get_match_summary(data):
+#     inning = data['inning']
+#     return {
+#         "Team": inning['name'],
+#         "Total Runs": inning['scores'],
+#         "Overs": inning['scores_full'].split('(')[-1].replace(")", ""),
+#         "Wickets": len([b for b in inning['batsmen'] if b['how_out']])
+#     }
+
+# # Get Top Players
+# def get_top_batsman(data):
+#     batsmen = data['inning']['batsmen']
+#     df = pd.DataFrame(batsmen)
+#     df['runs'] = df['runs'].astype(int)
+#     df['strike_rate'] = df['strike_rate'].astype(float)
+#     return df[['name', 'runs', 'balls_faced', 'strike_rate']].sort_values(by='runs', ascending=False)
+
+# # Get Top Bowlers
+# def get_top_bowler(data):
+#     bowlers = data['inning']['bowlers']
+#     df = pd.DataFrame(bowlers)
+#     df['wickets'] = df['wickets'].astype(int)
+#     df['econ'] = df['econ'].astype(float)
+#     return df[['name', 'overs', 'runs_conceded', 'wickets', 'econ']].sort_values(by='wickets', ascending=False)
+
+# # Sentiment Analysis on Commentary
+# def get_sentiment_analysis(data):
+#     comments = [c['commentary'] for c in data['commentaries'] if 'commentary' in c]
+#     sentiments = [sia.polarity_scores(c)['compound'] for c in comments]
+#     return pd.DataFrame({'Commentary': comments, 'Sentiment': sentiments})
+
+# # Generate PDF Report
+# def generate_pdf(match_summary, batsmen_df, bowlers_df, sentiment_df):
+#     pdf = FPDF()
+#     pdf.set_auto_page_break(auto=True, margin=15)
+#     pdf.add_page()
+    
+#     pdf.set_font("Arial", "B", 16)
+#     pdf.cell(200, 10, "Cricket Match Report", ln=True, align="C")
+#     pdf.ln(10)
+
+#     pdf.set_font("Arial", "B", 12)
+#     pdf.cell(200, 10, "Match Summary", ln=True)
+    
+#     pdf.set_font("Arial", size=10)
+#     for key, value in match_summary.items():
+#         pdf.cell(200, 10, f"{key}: {value}", ln=True)
+
+#     pdf.ln(10)
+#     pdf.set_font("Arial", "B", 12)
+#     pdf.cell(200, 10, "Top Batsmen", ln=True)
+    
+#     pdf.set_font("Arial", size=10)
+#     for index, row in batsmen_df.iterrows():
+#         pdf.cell(200, 10, f"{row['name']} - {row['runs']} Runs, SR: {row['strike_rate']}", ln=True)
+
+#     pdf.ln(10)
+#     pdf.set_font("Arial", "B", 12)
+#     pdf.cell(200, 10, "Top Bowlers", ln=True)
+    
+#     pdf.set_font("Arial", size=10)
+#     for index, row in bowlers_df.iterrows():
+#         pdf.cell(200, 10, f"{row['name']} - {row['wickets']} Wickets, Econ: {row['econ']}", ln=True)
+
+#     pdf.ln(10)
+#     pdf.set_font("Arial", "B", 12)
+#     pdf.cell(200, 10, "Commentary Sentiment Analysis", ln=True)
+    
+#     pdf.set_font("Arial", size=10)
+#     positive = sentiment_df[sentiment_df['Sentiment'] > 0.2].shape[0]
+#     negative = sentiment_df[sentiment_df['Sentiment'] < -0.2].shape[0]
+    
+#     pdf.cell(200, 10, f"Positive Comments: {positive}, Negative Comments: {negative}", ln=True)
+    
+#     pdf.output("cricket_report.pdf")
+#     return "cricket_report.pdf"
+
+# # Streamlit UI
+# st.title("🏏 Cricket Match Report Generator")
+
+# uploaded_file = st.file_uploader("Upload JSON match data", type=['json'])
+
+# if uploaded_file:
+#     data = load_data(uploaded_file)
+
+#     st.subheader("📊 Match Summary")
+#     match_summary = get_match_summary(data)
+#     st.json(match_summary)
+
+#     st.subheader("🏏 Top Batsmen")
+#     batsmen_df = get_top_batsman(data)
+#     st.dataframe(batsmen_df)
+
+#     st.subheader("🎯 Top Bowlers")
+#     bowlers_df = get_top_bowler(data)
+#     st.dataframe(bowlers_df)
+
+#     st.subheader("📢 Sentiment Analysis on Commentary")
+#     sentiment_df = get_sentiment_analysis(data)
+#     st.dataframe(sentiment_df)
+
+#     # Generate PDF
+#     if st.button("📄 Generate Report"):
+#         pdf_file = generate_pdf(match_summary, batsmen_df, bowlers_df, sentiment_df)
+#         with open(pdf_file, "rb") as file:
+#             st.download_button("Download Report", file, "match_report.pdf", mime="application/pdf")
+
+# ========
 
 # import streamlit as st
 # import pandas as pd
