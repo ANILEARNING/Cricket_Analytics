@@ -4,7 +4,9 @@ import json
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import io
 from fpdf import FPDF
+from PIL import Image
 
 # Load Match List
 def load_match_list():
@@ -56,39 +58,75 @@ def create_dataframes(all_data):
 
     return df_commentary, df_wagon, df_statistics
 
-# Plot Charts
-def plot_manhattan_chart(df_statistics, pdf):
+
+# Function to save figure to memory and add to PDF
+def save_fig_to_pdf(fig, pdf, x, y):
+    img_buf = io.BytesIO()
+    fig.savefig(img_buf, format='png', bbox_inches="tight")
+    img_buf.seek(0)
+    pdf.image(img_buf, x=x, y=y, w=180)
+    img_buf.close()
+
+# Manhattan Chart (Runs per Over)
+def plot_manhattan_chart(df_statistics, pdf=None):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
     df_manhattan = pd.DataFrame(df_statistics.iloc[0]["statistics"]["manhattan"])
+    
     fig, ax = plt.subplots(figsize=(6, 3))
     sns.barplot(x="over", y="runs", data=df_manhattan, color="blue", ax=ax)
     ax.set_title("Manhattan Chart - Runs per Over")
     st.pyplot(fig)
-    pdf.image("manhattan_chart.png", x=10, y=50, w=180)  # Add to PDF
 
-def plot_worm_chart(df_statistics, pdf):
+    if pdf:
+        save_fig_to_pdf(fig, pdf, x=10, y=50)
+
+# Worm Chart (Total Runs over Time)
+def plot_worm_chart(df_statistics, pdf=None):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
     df_worm = pd.DataFrame(df_statistics.iloc[0]["statistics"]["worm"])
+
     fig, ax = plt.subplots(figsize=(6, 3))
     sns.lineplot(x="over", y="runs", data=df_worm, marker="o", color="green", ax=ax)
     ax.set_title("Worm Chart - Runs Progression")
     st.pyplot(fig)
-    pdf.image("worm_chart.png", x=10, y=100, w=180)  # Add to PDF
 
-def plot_boundary_chart(df_statistics, pdf):
+    if pdf:
+        save_fig_to_pdf(fig, pdf, x=10, y=100)
+
+# Boundary Analysis
+def plot_boundary_chart(df_statistics, pdf=None):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
     df_boundary = pd.DataFrame(df_statistics.iloc[0]["statistics"]["runtypes"])
     df_boundary = df_boundary[df_boundary["key"].isin(["run4", "run6"])]
+
     fig, ax = plt.subplots(figsize=(6, 3))
     sns.barplot(x="name", y="value", data=df_boundary, color="orange", ax=ax)
     ax.set_title("Boundary Breakdown (Fours & Sixes)")
     st.pyplot(fig)
-    pdf.image("boundary_chart.png", x=10, y=150, w=180)  # Add to PDF
 
-def plot_bowler_economy_chart(df_statistics, pdf):
+    if pdf:
+        save_fig_to_pdf(fig, pdf, x=10, y=150)
+
+# Bowler Economy
+def plot_bowler_economy_chart(df_statistics, pdf=None):
+    if df_statistics.empty:
+        st.warning("No statistics available.")
+        return
     df_bowlers = pd.DataFrame(df_statistics.iloc[0]["bowlers"])
+
     fig, ax = plt.subplots(figsize=(6, 3))
     sns.barplot(x="name", y="econ", data=df_bowlers, color="red", ax=ax)
     ax.set_title("Bowler Economy Rate")
     st.pyplot(fig)
-    pdf.image("bowler_economy.png", x=10, y=200, w=180)  # Add to PDF
+
+    if pdf:
+        save_fig_to_pdf(fig, pdf, x=10, y=200)
 
 # Generate PDF Report with Charts & KPIs
 def generate_pdf(df_statistics):
@@ -152,8 +190,6 @@ if match_id:
         pdf_file = generate_pdf(df_statistics)
         with open(pdf_file, "rb") as file:
             st.download_button("Download Report", file, "match_report.pdf", mime="application/pdf")
-
-
 
 # import streamlit as st
 # import requests
